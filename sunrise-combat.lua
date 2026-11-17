@@ -1904,7 +1904,6 @@ local function hookSpeed(char)
 end
 if lp.Character then task.spawn(hookSpeed, lp.Character) end
 
-local noclipParts, noclipTimer = {}, 0
 connect(RunService.Stepped, function(_, dt)
 	if State.Bunnyhop then
 		local hum = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
@@ -1914,28 +1913,44 @@ connect(RunService.Stepped, function(_, dt)
 	end
 
 	if not State.Noclip or not lp.Character then return end
-	noclipTimer -= dt
-	if noclipTimer <= 0 then
-		noclipTimer = 0.5
-		noclipParts = {}
-		for _, p in ipairs(lp.Character:GetDescendants()) do
-			if p:IsA("BasePart") then table.insert(noclipParts, p) end
+
+	-- disable collision every frame on every part, including ones added mid-animation
+	for _, p in ipairs(lp.Character:GetDescendants()) do
+		if p:IsA("BasePart") and p.CanCollide then
+			p.CanCollide = false
 		end
 	end
-	for _, p in ipairs(noclipParts) do
-		if p.Parent then p.CanCollide = false end
-	end
+
 	local root = lp.Character:FindFirstChild("HumanoidRootPart")
-	if root and not State.Fly then
-		local dir = Vector3.zero
-		local c = workspace.CurrentCamera.CFrame
-		if UIS:IsKeyDown(Enum.KeyCode.W) then dir += c.LookVector end
-		if UIS:IsKeyDown(Enum.KeyCode.S) then dir -= c.LookVector end
-		if UIS:IsKeyDown(Enum.KeyCode.D) then dir += c.RightVector end
-		if UIS:IsKeyDown(Enum.KeyCode.A) then dir -= c.RightVector end
-		if dir.Magnitude > 0 then
-			root.CFrame = root.CFrame + dir.Unit * Settings.NoclipSpeed * dt
+	local hum = lp.Character:FindFirstChildOfClass("Humanoid")
+	if root and hum then
+		hum.PlatformStand = true -- stop the Humanoid's own physics from fighting our movement
+
+		if not State.Fly then
+			local dir = Vector3.zero
+			local c = workspace.CurrentCamera.CFrame
+			if UIS:IsKeyDown(Enum.KeyCode.W) then dir += c.LookVector end
+			if UIS:IsKeyDown(Enum.KeyCode.S) then dir -= c.LookVector end
+			if UIS:IsKeyDown(Enum.KeyCode.D) then dir += c.RightVector end
+			if UIS:IsKeyDown(Enum.KeyCode.A) then dir -= c.RightVector end
+			if UIS:IsKeyDown(Enum.KeyCode.Space) then dir += Vector3.yAxis end
+			if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then dir -= Vector3.yAxis end
+
+			root.AssemblyLinearVelocity = dir.Magnitude > 0 and dir.Unit * Settings.NoclipSpeed or Vector3.zero
+			root.AssemblyAngularVelocity = Vector3.zero
+
+			local flat = Vector3.new(c.LookVector.X, 0, c.LookVector.Z)
+			if flat.Magnitude > 0.01 then
+				root.CFrame = CFrame.lookAt(root.Position, root.Position + flat)
+			end
 		end
+	end
+end)
+
+connect(RunService.Stepped, function()
+	if not State.Noclip then
+		local hum = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
+		if hum and not State.Fly then hum.PlatformStand = false end
 	end
 end)
 
